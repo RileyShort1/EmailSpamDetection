@@ -1,6 +1,12 @@
 import torch
 from sklearn.metrics import classification_report
-from transformers import DistilBertTokenizer
+from sklearn.model_selection import train_test_split
+from torch.utils.data import TensorDataset, DataLoader
+from transformers import DistilBertTokenizer, DistilBertForSequenceClassification, get_linear_schedule_with_warmup
+from torch.optim import AdamW
+
+from data_pipeline.data_pipeline import get_data_as_clean_dataframe
+
 
 def tokenize_data(texts, labels, max_length=512):
     # Load DistilBERT tokenizer
@@ -88,3 +94,35 @@ def train_model(model, epochs, device, train_dataloader, optimizer, scheduler, v
             best_val_loss = avg_val_loss
             torch.save(model.state_dict(), 'best_distilbert_spam_classifier.pt')
             print("Model saved!")
+
+
+def test_model(model, test_dataloader, device):
+    # Test the model
+    model.load_state_dict(torch.load('best_distilbert_spam_classifier.pt'))
+    model.eval()
+
+    test_preds = []
+    test_true_labels = []
+    test_probs = []
+
+    with torch.no_grad():
+        for batch in test_dataloader:
+            batch = tuple(b.to(device) for b in batch)
+            inputs = {
+                'input_ids': batch[0],
+                'attention_mask': batch[1],
+                'labels': batch[2]
+            }
+
+            outputs = model(**inputs)
+            logits = outputs.logits
+
+            preds = torch.argmax(logits, dim=1).cpu().numpy()
+            test_preds.extend(preds)
+            test_true_labels.extend(inputs['labels'].cpu().numpy())
+
+            probs = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()  # Probability for spam
+            test_probs.extend(probs)
+
+    print("\nTest Set Results:")
+    print(classification_report(test_true_labels, test_preds, target_names=['ham', 'spam'], digits=3))

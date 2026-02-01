@@ -1,21 +1,16 @@
-from sklearn.metrics import classification_report
+import os
+
 from sklearn.model_selection import train_test_split
 import torch
-from data_pipeline.data_pipeline import get_data_as_clean_dataframe
-from model.model import tokenize_data, train_model
-from torch.utils.data import DataLoader, TensorDataset
-from transformers import DistilBertForSequenceClassification
 from torch.optim import AdamW
-from transformers import get_linear_schedule_with_warmup
+from torch.utils.data import TensorDataset, DataLoader
+from transformers import DistilBertForSequenceClassification, get_linear_schedule_with_warmup
 
-
+from data_pipeline.data_pipeline import get_data_as_clean_dataframe
+from model.model import test_model, tokenize_data, train_model
 
 if __name__ == '__main__':
     df = get_data_as_clean_dataframe()
-
-    print((df['label'] == 0).sum())
-    print((df['label'] == 1).sum())
-
 
     texts = df['text'].to_list()
     labels = df['label'].to_list()
@@ -50,14 +45,13 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size)
 
 
-
     model = DistilBertForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=2)
 
+    epochs = 3
     # Set up the optimizer
     optimizer = AdamW(model.parameters(), lr=1e-5)
 
     # Set up the learning rate scheduler
-    epochs = 1
     total_steps = len(train_dataloader) * epochs
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
@@ -69,37 +63,8 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.to(device)
 
-    # Call training function
-    train_model(model, epochs, device, train_dataloader, optimizer, scheduler, val_dataloader)
+    if not os.path.exists('best_distilbert_spam_classifier.pt'):
+        # Call training function
+        train_model(model, epochs, device, train_dataloader, optimizer, scheduler, val_dataloader)
 
-
-    # Test the model
-    model.load_state_dict(torch.load('best_distilbert_spam_classifier.pt'))
-    model.eval()
-
-    test_preds = []
-    test_true_labels = []
-    test_probs = []
-
-    with torch.no_grad():
-        for batch in test_dataloader:
-            batch = tuple(b.to(device) for b in batch)
-            inputs = {
-                'input_ids': batch[0],
-                'attention_mask': batch[1],
-                'labels': batch[2]
-            }
-
-            outputs = model(**inputs)
-            logits = outputs.logits
-
-            preds = torch.argmax(logits, dim=1).cpu().numpy()
-            test_preds.extend(preds)
-            test_true_labels.extend(inputs['labels'].cpu().numpy())
-
-            probs = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()  # Probability for spam
-            test_probs.extend(probs)
-
-    print("\nTest Set Results:")
-    print(classification_report(test_true_labels, test_preds, target_names=['ham', 'spam'], digits=3))
-
+    test_model(model, test_dataloader, device)
