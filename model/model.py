@@ -1,4 +1,5 @@
 import torch
+from sklearn.metrics import classification_report
 from transformers import DistilBertTokenizer
 
 def tokenize_data(texts, labels, max_length=512):
@@ -79,8 +80,8 @@ def train_model(model, epochs, device, train_dataloader, optimizer, scheduler, v
         print(f"Validation loss: {avg_val_loss:.4f}")
 
         # Print validation metrics
-        #print("\nValidation Results:")
-        #print(classification_report(val_true_labels, val_preds, target_names=['spam', 'ham'], digits=3))
+        print("\nValidation Results:")
+        print(classification_report(val_true_labels, val_preds, target_names=['ham', 'spam'], digits=3))
 
         # Save best model
         if avg_val_loss < best_val_loss:
