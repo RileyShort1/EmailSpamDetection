@@ -98,7 +98,8 @@ def train_model(model, epochs, device, train_dataloader, optimizer, scheduler, v
 
 def test_model(model, test_dataloader, device):
     # Test the model
-    model.load_state_dict(torch.load('best_distilbert_spam_classifier.pt'))
+    state = torch.load("best_distilbert_spam_classifier.pt", map_location=device)
+    model.load_state_dict(state, strict=True)
     model.eval()
 
     test_preds = []
